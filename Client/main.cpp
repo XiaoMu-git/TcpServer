@@ -15,30 +15,41 @@ int main() {
 	// ---------- 1.建立socket ----------
 
 	// 网络协议为0, 自动匹配服务器协议
-	SOCKET client_socket = INVALID_SOCKET;
-	client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (INVALID_SOCKET == client_socket) printf("Socket creating failed.\n");
+	SOCKET server_socket = INVALID_SOCKET;
+	server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (INVALID_SOCKET == server_socket) printf("Socket creating failed.\n");
 	else printf("Socket creating successful.\n");
 
 	// ---------- 2.连接服务器 ----------
 
-	sockaddr_in client_socket_addr_in = {};
-	client_socket_addr_in.sin_family = AF_INET;
-	client_socket_addr_in.sin_port = htons(12345);
-	client_socket_addr_in.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
-	if (SOCKET_ERROR == connect(client_socket, (sockaddr*)&client_socket_addr_in, sizeof sockaddr_in)) printf("Connection to server failed.\n");
+	sockaddr_in server_socket_addr_in = {};
+	server_socket_addr_in.sin_family = AF_INET;
+	server_socket_addr_in.sin_port = htons(12345);
+	server_socket_addr_in.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+	if (SOCKET_ERROR == connect(server_socket, (sockaddr*)&server_socket_addr_in, sizeof sockaddr_in)) printf("Connection to server failed.\n");
 	else printf("Connection to server successful.\n");
 
-	// ---------- 3.接受服务器的数据 ----------
+	while (true) {
+		// ---------- 3.向服务器发送消息 ----------
+		char send_buffer[1024];
+		scanf("%s", send_buffer);
+		send(server_socket, send_buffer, strlen(send_buffer) + 1, 0);
 
-	char recv_buffer[256];
-	int recv_len = recv(client_socket, recv_buffer, 256, 0);
-	if (recv_len > 0) printf("Received server message: %s\n", recv_buffer);
 
-	// ---------- 4.关闭socket ----------
 
-	closesocket(client_socket);
+		// ---------- 4.接受服务器的数据 ----------
 
+		char recv_buffer[1024];
+		int recv_len = recv(server_socket, recv_buffer, 1024, 0);
+		if (recv_len > 0) {
+			printf("Received server message: %s\n", recv_buffer);
+			if (0 == strcmp(recv_buffer, "close")) break;
+		}
+	}
+
+	// ---------- 5.关闭socket ----------
+
+	closesocket(server_socket);
 	WSACleanup();	// 关闭windows socket 2.x环境
 	system("pause");
 	return 0;

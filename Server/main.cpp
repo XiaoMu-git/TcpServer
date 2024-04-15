@@ -43,24 +43,36 @@ int main() {
 
 	sockaddr_in client_addr_in = {};
 	int client_addr_len = sizeof client_addr_in;
+	// 初始化为无效socket
+	SOCKET client_socket = INVALID_SOCKET;
+	client_socket = accept(server_socket, (sockaddr*)&client_addr_in, &client_addr_len);
+	if (INVALID_SOCKET == client_socket) printf("Accept to invalid client.\n");
+	else printf("New client join, ip: %s\n", inet_ntoa(client_addr_in.sin_addr));
 	while (true) {
-		// 初始化为无效socket
-		SOCKET client_socket = INVALID_SOCKET;
-		client_socket = accept(server_socket, (sockaddr*)&client_addr_in, &client_addr_len);
-		if (INVALID_SOCKET == client_socket) printf("Accept to invalid client.\n");
-		else printf("New client join, ip: %s\n", inet_ntoa(client_addr_in.sin_addr));
+		// ---------- 5.接收Client消息 ----------
+		char recv_buffer[1024];
+		int recv_len = recv(client_socket, recv_buffer, 1024, 0);
+		// 可能已经断开连接
+		if (0 >= recv_len) break;
+		else {
+			// ---------- 6.发送给Client消息 ----------
 
-		// ---------- 5.发送给Client消息 ----------
-
-		char send_message[] = "Hello, I am server.";
-		// strlen(send_message) + 1是将结尾的/0一并发送
-		send(client_socket, send_message, strlen(send_message) + 1, 0);
+			if (0 == strcmp(recv_buffer, "close")) {
+				char send_message[] = "close";
+				// strlen(send_message) + 1是将结尾的/0一并发送
+				send(client_socket, send_message, strlen(send_message) + 1, 0);
+			}
+			else {
+				char send_message[] = "Invalid command.";
+				// strlen(send_message) + 1是将结尾的/0一并发送
+				send(client_socket, send_message, strlen(send_message) + 1, 0);
+			}
+		}
 	}
 
-	// ---------- 6.关闭socket ----------
+	// ---------- 7.关闭socket ----------
 
 	closesocket(server_socket);
-
 	WSACleanup();	// 关闭windows socket 2.x环境
 	system("pause");
 	return 0;
