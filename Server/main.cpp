@@ -5,7 +5,7 @@
 #include <windows.h>
 #include <iostream>
 
-#include "DataPackage.h"
+#include "DataType.h"
 
 #pragma comment(lib, "ws2_32.lib")	// windows上的链接库，可以直接在设置中添加
 
@@ -57,33 +57,66 @@ int main() {
 		Header recv_header;
 		int recv_len = recv(client_socket, (char*)&recv_header, sizeof Header, 0);
 		// 可能已经断开连接
-		if (0 >= recv_len) break;
+		if (0 >= recv_len) {
+			printf("Client disconnected, server shutdown.\n");
+			break;
+		}
 		else {
 			// ---------- 6.返回给Client消息 ----------
 
-			UserInfo user_info;
-			Header send_header;
-			Result send_message;
-			if (CMD_ERROR == recv_header.cmd) {
-				printf("Received error command.\n");
-				send_header.set(0, CMD_ERROR);
-				send(client_socket, (const char*)&send_header, sizeof Header, 0);
+			
+			Command recv_command;
+			if (DATA_LOGIN == recv_header.type) {
+				// 处理客户端登录请求
+				printf("Received a message of type DATA_LOGIN with a length of %d from %d.\n", recv_header.size, client_socket);
+				UserInfo recv_user_info;
+				recv(client_socket, (char*)&recv_user_info + sizeof Header, recv_user_info.size - sizeof Header, 0);
+				if (!strcmp(recv_user_info.password, "123456")) {
+					// 登录成功
+					Response send_response;
+					send_response.type = DATA_LOGIN_RESPONSE;
+					send(client_socket, (const char*)&send_response, send_response.size, 0);
+				}
+				else {
+					// 登陆失败
+					Response send_response;
+					send_response.type = DATA_LOGIN_RESPONSE;
+					// 大于0的相应均为异常, 状态为1原因是密码错误
+					send_response.state = 1;
+					send(client_socket, (const char*)&send_response, send_response.size, 0);
+				}
 			}
-			else if (CMD_LOGIN == recv_header.cmd) {
-				printf("Received login command.\n");
-				send_header.set(sizeof Result, CMD_RESULT);
-				recv(client_socket, (char*)&user_info, sizeof UserInfo, 0);
-				if (!strcmp(user_info.username, "xiaomu") && !strcmp(user_info.password, "123456")) send_message.set(1, "");
-				else send_message.set(0, "");
-				send(client_socket, (const char*)&send_header, sizeof Header, 0);
-				send(client_socket, (const char*)&send_message, sizeof Result, 0);
+			else if (DATA_LOGOUT == recv_header.type) {
+				// 处理客户端登出请求
+				printf("Received a message of type DATA_LOGOUT with a length of %d from %d.\n", recv_header.size, client_socket);
+				Response send_response;
+				send_response.type = DATA_LOGOUT_RESPONSE;
+				send(client_socket, (const char*)&send_response, send_response.size, 0);
 			}
-			else if (CMD_QUIT == recv_header.cmd) {
-				printf("Received quit command.\n");
-				send_message.set(1, "");
-				send(client_socket, (const char*)&send_message, sizeof Result, 0);
-				break;
+			else if (DATA_COMMAND) {
+				// 处理客户端发来的命令
+				printf("Received a message of type DATA_COMMAND with a length of %d from %d.\n", recv_header.size, client_socket);
+				Command recv_command;
+				recv(client_socket, (char*)&recv_command + sizeof Header, recv_command.size - sizeof Header, 0);
+				if (!strcmp(recv_command.command, "close")) {
+					// 关闭服务端
+					Response send_response;
+					send_response.type = DATA_COMMAND_RESPONSE;
+					send(client_socket, (const char*)&send_response, send_response.size, 0);
+					break;
+				}
+				else {
+					// 接收到未知命令
+					Response send_response;
+					send_response.type = DATA_COMMAND_RESPONSE;
+					send_response.state = 1;
+					send(client_socket, (const char*)&send_response, send_response.size, 0);
+				}
 			}
+			else if (DATA_ERROR == recv_header.type) {
+				printf("Received a message of type DATA_ERROR with a length of %d from %d.\n", recv_header.size, client_socket);
+			}
+			else printf("Received invalid message from %d.\n", client_socket);
 		}
 	}
 

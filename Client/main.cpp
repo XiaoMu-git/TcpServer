@@ -3,7 +3,7 @@
 #include <WinSock2.h>
 #include <windows.h>
 #include <iostream>
-#include "DataPackage.h"
+#include "DataType.h"
 
 #pragma comment(lib, "ws2_32.lib")	// windows上的链接库，可以直接在设置中添加
 
@@ -32,21 +32,20 @@ int main() {
 
 	while (true) {
 		// ---------- 3.向服务器发送消息 ----------
-		Header send_header;
-		UserInfo user_info;
-		char cmd[32];
-		scanf("%s", cmd);
-		if (!strcmp(cmd, "quit")) {
-			send_header.set(0, CMD_QUIT);
-			send(server_socket, (const char*)&send_header, sizeof Header, 0);
+
+		char command[32];
+		scanf("%s", command);
+		if (!strcmp(command, "login")) {
+			// 登录请求
+			UserInfo send_user_info;
+			send_user_info.type = DATA_LOGIN;
+			scanf("%s %s", send_user_info.username, send_user_info.password);
+			send(server_socket, (const char*)&send_user_info, send_user_info.size, 0);
 		}
-		else if (!strcmp(cmd, "login")) {
-			char username[32], password[32];
-			scanf("%s %s", username, password); 
-			send_header.set(sizeof UserInfo, CMD_LOGIN);
-			user_info.set(username, password);
-			send(server_socket, (const char*)&send_header, sizeof Header, 0);
-			send(server_socket, (const char*)&user_info, sizeof UserInfo, 0);
+		else {
+			Command send_command;
+			strcpy(send_command.command, command);
+			send(server_socket, (const char*)&send_command, send_command.size, 0);
 		}
 
 		// ---------- 4.接受服务器的数据 ----------
@@ -55,22 +54,31 @@ int main() {
 		int recv_len = recv(server_socket, (char*)&recv_header, sizeof Header, 0);
 		if (0 >= recv_len) break;
 		else {
-			Result recv_result;
-			switch (recv_header.cmd) {
-			case CMD_ERROR:
-				printf("Received error command.\n");
-				break;
-			case CMD_RESULT:
-				recv(server_socket, (char*)&recv_result, sizeof Result, 0);
-				if (CMD_LOGIN == send_header.cmd) {
-					if (recv_result.result == true) printf("Login successful.\n");
-					else printf("Login failed.\n");
-				}
-				else if (CMD_QUIT == send_header.cmd) {
-					if (recv_result.result == true) printf("Quit successful.\n");
-					else printf("Quit failed.\n");
-				}
+			if (DATA_LOGIN_RESPONSE == recv_header.type) {
+				// 处理登录请求的响应
+				Response recv_response;
+				recv(server_socket, (char*)&recv_response + sizeof Header, recv_response.size - sizeof Header, 0);
+				if (!recv_response.state) printf("Login successed.\n");
+				else printf("Login failed.\n");
 			}
+			else if (DATA_LOGOUT_RESPONSE == recv_header.type) {
+				// 处理登出请求的响应
+				Response recv_response;
+				recv(server_socket, (char*)&recv_response + sizeof Header, recv_response.size - sizeof Header, 0);
+				if (!recv_response.state) printf("Logout successful.\n");
+				else printf("Logout failed.\n");
+			}
+			else if (DATA_COMMAND_RESPONSE == recv_header.type) {
+				// 处理命令的响应
+				Response recv_response;
+				recv(server_socket, (char*)&recv_response + sizeof Header, recv_response.size - sizeof Header, 0);
+				if (!recv_response.state) printf("Command execution successful.\n");
+				else printf("Command execution failed.\n");
+			}
+			else if (DATA_ERROR == recv_header.type) {
+				printf("Received a message of type DATA_ERROR with a length of %d from server.\n", recv_header.size);
+			}
+			else printf("Received invalid message from server.\n");
 		};
 	}
 
