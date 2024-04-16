@@ -1,8 +1,11 @@
 #define WIN32_LEAN_AND_MEAN	// 用来避免新旧版本中宏的重定义
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <WinSock2.h>
 #include <windows.h>
 #include <iostream>
+
+#include "DataPackage.h"
 
 #pragma comment(lib, "ws2_32.lib")	// windows上的链接库，可以直接在设置中添加
 
@@ -50,22 +53,36 @@ int main() {
 	else printf("New client join, ip: %s\n", inet_ntoa(client_addr_in.sin_addr));
 	while (true) {
 		// ---------- 5.接收Client消息 ----------
-		char recv_buffer[1024];
-		int recv_len = recv(client_socket, recv_buffer, 1024, 0);
+
+		Header recv_header;
+		int recv_len = recv(client_socket, (char*)&recv_header, sizeof Header, 0);
 		// 可能已经断开连接
 		if (0 >= recv_len) break;
 		else {
-			// ---------- 6.发送给Client消息 ----------
+			// ---------- 6.返回给Client消息 ----------
 
-			if (0 == strcmp(recv_buffer, "close")) {
-				char send_message[] = "close";
-				// strlen(send_message) + 1是将结尾的/0一并发送
-				send(client_socket, send_message, strlen(send_message) + 1, 0);
+			UserInfo user_info;
+			Header send_header;
+			Result send_message;
+			if (CMD_ERROR == recv_header.cmd) {
+				printf("Received error command.\n");
+				send_header.set(0, CMD_ERROR);
+				send(client_socket, (const char*)&send_header, sizeof Header, 0);
 			}
-			else {
-				char send_message[] = "Invalid command.";
-				// strlen(send_message) + 1是将结尾的/0一并发送
-				send(client_socket, send_message, strlen(send_message) + 1, 0);
+			else if (CMD_LOGIN == recv_header.cmd) {
+				printf("Received login command.\n");
+				send_header.set(sizeof Result, CMD_RESULT);
+				recv(client_socket, (char*)&user_info, sizeof UserInfo, 0);
+				if (!strcmp(user_info.username, "xiaomu") && !strcmp(user_info.password, "123456")) send_message.set(1, "");
+				else send_message.set(0, "");
+				send(client_socket, (const char*)&send_header, sizeof Header, 0);
+				send(client_socket, (const char*)&send_message, sizeof Result, 0);
+			}
+			else if (CMD_QUIT == recv_header.cmd) {
+				printf("Received quit command.\n");
+				send_message.set(1, "");
+				send(client_socket, (const char*)&send_message, sizeof Result, 0);
+				break;
 			}
 		}
 	}

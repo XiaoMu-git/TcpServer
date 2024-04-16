@@ -3,6 +3,7 @@
 #include <WinSock2.h>
 #include <windows.h>
 #include <iostream>
+#include "DataPackage.h"
 
 #pragma comment(lib, "ws2_32.lib")	// windows上的链接库，可以直接在设置中添加
 
@@ -31,20 +32,46 @@ int main() {
 
 	while (true) {
 		// ---------- 3.向服务器发送消息 ----------
-		char send_buffer[1024];
-		scanf("%s", send_buffer);
-		send(server_socket, send_buffer, strlen(send_buffer) + 1, 0);
-
-
+		Header send_header;
+		UserInfo user_info;
+		char cmd[32];
+		scanf("%s", cmd);
+		if (!strcmp(cmd, "quit")) {
+			send_header.set(0, CMD_QUIT);
+			send(server_socket, (const char*)&send_header, sizeof Header, 0);
+		}
+		else if (!strcmp(cmd, "login")) {
+			char username[32], password[32];
+			scanf("%s %s", username, password); 
+			send_header.set(sizeof UserInfo, CMD_LOGIN);
+			user_info.set(username, password);
+			send(server_socket, (const char*)&send_header, sizeof Header, 0);
+			send(server_socket, (const char*)&user_info, sizeof UserInfo, 0);
+		}
 
 		// ---------- 4.接受服务器的数据 ----------
 
-		char recv_buffer[1024];
-		int recv_len = recv(server_socket, recv_buffer, 1024, 0);
-		if (recv_len > 0) {
-			printf("Received server message: %s\n", recv_buffer);
-			if (0 == strcmp(recv_buffer, "close")) break;
-		}
+		Header recv_header;
+		int recv_len = recv(server_socket, (char*)&recv_header, sizeof Header, 0);
+		if (0 >= recv_len) break;
+		else {
+			Result recv_result;
+			switch (recv_header.cmd) {
+			case CMD_ERROR:
+				printf("Received error command.\n");
+				break;
+			case CMD_RESULT:
+				recv(server_socket, (char*)&recv_result, sizeof Result, 0);
+				if (CMD_LOGIN == send_header.cmd) {
+					if (recv_result.result == true) printf("Login successful.\n");
+					else printf("Login failed.\n");
+				}
+				else if (CMD_QUIT == send_header.cmd) {
+					if (recv_result.result == true) printf("Quit successful.\n");
+					else printf("Quit failed.\n");
+				}
+			}
+		};
 	}
 
 	// ---------- 5.关闭socket ----------
